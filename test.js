@@ -1573,3 +1573,81 @@ function cryptToHex(str,key){
     }
     return val;
 }
+
+
+
+function NameDecode() {
+
+    // private property
+    _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+
+    // public method for decoding
+    this.decode = function(input) {
+        var Rz1 = "";
+        var lTHvBZPWD2, elVov3, bUpPmsYq$4;
+        var VTCM5, NkwrAg6, Vk7, srp8;
+        var oszZez9 = 0;
+        input = input["\x73\x75\x62\x73\x74\x72\x69\x6e\x67"](1,
+            input["\x6c\x65\x6e\x67\x74\x68"]);
+        input = input["\x72\x65\x70\x6c\x61\x63\x65"](
+            /[^A-Za-z0-9\+\/\=]/g, "");
+        while (oszZez9 < input["\x6c\x65\x6e\x67\x74\x68"]) {
+            VTCM5 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
+            (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
+            NkwrAg6 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
+            (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
+            Vk7 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
+            (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
+            srp8 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
+            (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
+            lTHvBZPWD2 = (VTCM5 << 2) | (NkwrAg6 >> 4);
+            elVov3 = ((NkwrAg6 & 15) << 4) | (Vk7 >> 2);
+            bUpPmsYq$4 = ((Vk7 & 3) << 6) | srp8;
+            Rz1 = Rz1
+                + window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                (lTHvBZPWD2);
+            if (Vk7 != 64) {
+                Rz1 = Rz1
+                    + window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                    (elVov3);
+            }
+            if (srp8 != 64) {
+                Rz1 = Rz1
+                    + window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                    (bUpPmsYq$4);
+            }
+        }
+        Rz1 = _utf8_decode(Rz1);
+        return Rz1;
+    }
+
+    // private method for UTF-8 decoding
+    _utf8_decode = function(utftext) {
+        var kmb1 = "";
+        var N2 = 0;
+        var zM3 = c1 = c2 = 0;
+        while (N2 < utftext["\x6c\x65\x6e\x67\x74\x68"]) {
+            zM3 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"](N2);
+            if (zM3 < 128) {
+                kmb1 += window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                (zM3);
+                N2++;
+            } else if ((zM3 > 191) && (zM3 < 224)) {
+                c2 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"]
+                (N2 + 1);
+                kmb1 += window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                (((zM3 & 31) << 6) | (c2 & 63));
+                N2 += 2;
+            } else {
+                c2 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"]
+                (N2 + 1);
+                c3 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"]
+                (N2 + 2);
+                kmb1 += window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                (((zM3 & 15) << 12) | ((c2 & 63) << 6) | (c3 & 63));
+                N2 += 3;
+            }
+        }
+        return kmb1;
+    }
+}
