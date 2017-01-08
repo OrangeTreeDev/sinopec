@@ -11,13 +11,13 @@
     <div class="form-group">
         <label class="col-sm-2 control-label" for="cardnum">加油卡号</label>
         <div class="col-sm-10">
-            <input type="number" class="form-control" id="cardnum">
+            <input type="number" class="form-control" id="cardnum" autocomplete="on">
         </div>
     </div>
     <div class="form-group">
         <label class="col-sm-2 control-label" for="phonenum">手机号</label>
         <div class="col-sm-10">
-            <input type="tel" class="form-control" id="phonenum">
+            <input type="tel" class="form-control" id="phonenum" autocomplete="on">
         </div>
     </div>
     <div  class="form-group">
@@ -49,11 +49,7 @@
             },function(res){
 
                 console.log('smsyzm:'+ res);
-                var phoneinfo = {
-                    phonenum: $("#phonenum").val(),
-                    smsyzm: $('#validatenum').val()
-                }
-                window.localStorage.setItem('phoneinfo',JSON.stringify(phoneinfo) );
+
             });
         });
 
@@ -68,6 +64,19 @@
 
                 console.log('querycardinfo:'+ result);
                 result = JSON.parse( result);
+
+                // 手机短信验证码
+                var smsyzmresult = result.smsyzmresult;
+
+                if(smsyzmresult == 4){
+                    alert("请重新获取验证码或登录以后再充值!");
+                    return;
+                }
+
+                if(smsyzmresult == 3){
+                    alert("短信验证码有误，请重试!");
+                    return;
+                }
 
                 var cardInfo = result.cardInfo;
                 if(cardInfo == "error"){
@@ -88,7 +97,9 @@
                 // 卡状态,04-正常使用卡,05-挂失卡,07-失效卡,09-坏卡,10-作废卡,其他响应吗:卡状态异常
                 var cardStatus = cardInfo.cardStatus;
                 if(cardStatus != '' && cardStatus != null && cardStatus != 'null'){
-                    if(cardStatus == '05'){
+                    if(cardStatus == '04'){
+                        console.log('油卡正常使用');
+                    } else if(cardStatus == '05'){
                         alert('该卡已挂失，不能进行充值!');
                         return;
                     } else if(cardStatus == '07'){
@@ -114,6 +125,12 @@
                         return;
                     }
                 }
+
+                var phoneinfo = {
+                    phonenum: $("#phonenum").val(),
+                    smsyzm: $('#validatenum').val()
+                }
+                window.localStorage.setItem('phoneinfo',JSON.stringify(phoneinfo) );
 
                 window.localStorage.setItem('cardinfo', JSON.stringify(cardInfo));
                 window.location.href = '/static/recharge.html';

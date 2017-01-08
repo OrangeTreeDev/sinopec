@@ -12,13 +12,13 @@
     <div  class="form-group">
         <label class="col-sm-2 control-label" for="cardid">卡号</label>
         <div class="col-sm-10">
-            <input type="number" class="form-control" id="cardid">
+            <input type="number" class="form-control" id="cardid" readonly>
         </div>
     </div>
     <div  class="form-group">
         <label class="col-sm-2 control-label" for="customename">客户</label>
         <div class="col-sm-10">
-            <input type="text" class="form-control" id="customename">
+            <input type="text" class="form-control" id="customename" readonly>
         </div>
     </div>
     <div  class="form-group">
@@ -57,29 +57,179 @@
 
             if (cardInfo && phoneInfo){
 
+                var czkPwd = $('#carpass').val();
+                var reg = /^[0-9]{20}$/;
+                var czkPwdStr;
+                if(reg.test(czkPwd)){
+
+                    czkPwdStr = JSON.stringify([cryptToHex(czkPwd, 158)]);
+                }else {
+                    alert('充值卡密码是20位数字');
+                    return;
+                }
+
                 $.post('/api/czkcharge',{
                     'rechargeCardNo': cardInfo.cardNo,
-                    'rechargeCzkCardPwd': $('#carpass').val(),
+                    'rechargeCzkCardPwd': czkPwdStr,
                     'rechargeCardPhone': phoneInfo.phonenum,
                     'smsYzm': phoneInfo.smsyzm,
-                    'addCyCardNoTiXing':true,
+                    'addCyCardNoTiXing':"false",
                     'yzm':$("#captcha").val()
-                }, function(res){
+                }, function(result){
 
-                    console,log('sure recharge:' + res);
+                    result = JSON.parse( result );
+                    var yzmResult = result.yzmresult;
+                    if(yzmResult == "1"){
+                        alert("请重新获取验证码!");
+                        return;
+                    }
+
+                    if(yzmResult == "2"){
+                        alert("验证码输入有误!");
+                        return;
+                    }
+                    console.log('sure recharge:' + JSON.stringify(result));
+
+                    if(result.error){
+                        alert(result.error);
+                        return;
+                    }
+
+                    var list = result.list;
+                    for(var i = 0; i < list.length; i++){
+
+                        var orderId = list[i][0];
+                        checkOrder(orderId , cardInfo);
+                    }
                 });
             }
         });
 
         $('#captchaimg').on('click', function(e){
 
-            $('#captchaimg').attr('src', 'http://www.sinopecsales.com/gas/YanZhengMaServlet?'+ Math.random());
+            $('#captchaimg').attr('src', '/api/captcha'+'?'+Math.random());
         });
 
 
         // 验证码初始化
-        $('#captchaimg').attr('src', 'http://www.sinopecsales.com/gas/YanZhengMaServlet?'+ Math.random());
+        $('#captchaimg').attr('src', '/api/captcha'+'?'+Math.random());
     });
+
+    /* 查询订单 */
+    function checkOrder( orderId ,cardInfo ){
+
+        if( orderId){
+
+            /* 查询订单 */
+            $.post(
+                    'api/selectcardorder',
+                    {
+                        'orderId':orderId
+                    },
+                    function(result){
+
+                        // 订单支付状态
+                        var orderStatus = result.ordersuccess;
+
+                        // 订单充值状态
+                        var gcaStatus = result.success;
+
+                        // 验卡错误提示
+                        var respCode = result.respCode;
+
+                        if(orderStatus == null || orderStatus == "null" || orderStatus == "undefined"){
+
+                            //无此订单
+                            alert("查询订单状态失败");
+                            return;
+                        } else if(orderStatus == 0){
+
+                            alert("查询订单状态失败!");
+                            return;
+                        } else if(orderStatus == 1){
+
+                            // 支付成功
+                            switch(gcaStatus){
+                                case 0:{
+
+                                    //未充值
+                                    alert("未充值");
+                                    break;
+                                }
+                                case 1:{
+                                    //正在充值
+                                    alert("充值卡验证通过，系统正在充值，请耐心等待!");
+                                    break;
+                                }
+                                case 2:{
+
+                                    //充值成功
+                                    $("#pay_suc_tishi"+rows).html("您的充值金额为");
+
+                                    // 查询充值金额
+                                    $.post('api/getcardinfo',
+                                            {
+                                                'cardNo': cardInfo.cardNo
+                                            },
+                                            function(result){
+
+                                                var cardInfo = result.cardInfo;
+
+                                                //客户类型
+                                                var compType = cardInfo.compType;
+                                                // 客户类型，01:单位单用户,02:单位多用户,03:个人单用户,04:个人多用户,07:不记名客户
+                                                // 如果是单用户卡客户，则修改我的加油卡备付金余额
+                                                if(compType == '01' || compType == "03"){
+                                                    alert(cardInfo.preBalance.parseFen2Yuan());
+                                                } else{
+                                                    // 如果是多用户，则修改我的加油卡额度账余额
+                                                    alert(cardInfo.balance.parseFen2Yuan());
+                                                }
+
+                                            },"json"
+                                    );
+
+                                    break;
+                                }
+                                case 3:{
+
+                                    //充值失败
+                                    alert("充值卡验证成功但充值失败,请您查询订单状态；如已支付成功，我们将为您的订单进行异常处理，请您耐心"+
+                                            "等候；您也可拨打中国石化客服热线95105888,咨询订单异常处理进度。");
+                                    break;
+                                }
+                                case 4:{
+
+                                    //无此订单
+                                    alert("无此订单!");
+                                    break;
+                                }
+                                case 5:{
+
+                                    // 支付成功， 充值正在进行
+                                    alert("支付已成功,充值正在进行中，请耐心等待!");
+                                    break;
+                                }
+                            }
+                        } else if(orderStatus == 2){
+
+                            if(respCode == null || respCode == "null" || respCode == "undefined" ){
+
+                                //无此订单
+                                alert("查询订单状态失败!");
+                                return;
+                            }else {
+
+                                // 支付失败
+                                alert("订单支付失败，" + respCode);
+                            }
+                        }
+                    },"json");
+
+        }else {
+            alert('没有订单');
+        }
+    }
 
     function parseInfo( cardInfo ){
 
@@ -173,4 +323,40 @@
             return kmb1;
         }
     }
+
+    function cryptToHex(str,key){
+        var val="";
+        for(var i=0;i<str.length;i++){
+            var temp=(str.charCodeAt(i)^key).toString(16);
+            if(temp.length==1){
+                val+="0";
+            }
+            val+=temp;
+        }
+        return val;
+    }
+
+
+    //元转换成分(整数)
+    String.prototype.parseYuan2Fen=function(){
+        if(isNaN(this)){
+            return 0;
+        }
+
+        return (new Number(this*100)).toFixed(0);
+    };
+
+    //分(整数)转换成元
+    String.prototype.parseFen2Yuan=function(){
+        if(isNaN(this)){
+            return 0;
+        }
+
+        return (new Number(this/100)).toFixed(2);
+    };
+
+    //去掉左边的0
+    String.prototype.trimLeft0=function(){
+        return this.replace(/\b(0+)/gi,"");
+    };
 </script>
