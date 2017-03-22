@@ -1,9 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>加油卡充值</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
     <link href="bootstrap.css" rel="stylesheet">
+    <link rel="stylesheet" href="sinopec.css">
     <script type="text/javascript" src="jquery-3.1.1.min.js"></script>
 </head>
 <body>
@@ -22,18 +24,15 @@
         </div>
     </div>
     <div  class="form-group">
-        <label class="col-sm-2 control-label" for="carpass">卡密</label>
+        <label class="col-sm-2 control-label" for="phonenum">手机号</label>
         <div class="col-sm-10">
-            <input type="number" class="form-control" id="carpass">
+            <input type="number" class="form-control" id="phonenum">
         </div>
     </div>
     <div  class="form-group">
-        <label class="col-sm-2 control-label" for="captcha">验证码</label>
-        <div class="col-sm-8">
-            <input type="text" class="form-control" id="captcha">
-        </div>
-        <div class="col-sm-2">
-            <img id="captchaimg" style="width: 90px; height: 25px">
+        <label class="col-sm-2 control-label" for="czkPwd">卡密</label>
+        <div class="col-sm-10">
+            <input type="number" class="form-control" id="czkPwd" value="12345678998765432112">
         </div>
     </div>
     <div class="form-group">
@@ -48,315 +47,71 @@
 
     $(document).ready( function(e){
 
+        // 读取localstorage里面存储的值
         console.log('recharge:' + window.localStorage.cardinfo);
         var cardInfo = window.localStorage.cardinfo? JSON.parse( window.localStorage.cardinfo): undefined;
-        var phoneInfo = window.localStorage.phoneinfo ? JSON.parse( localStorage.phoneinfo ) : undefined;
-        parseInfo( cardInfo);
 
+
+        if (cardInfo){
+            //设置加油卡卡号
+            $("#cardid").val( cardInfo.cardNo );
+
+            // 设置客户名称
+            $("#customename").val(cardInfo.cardHolder);
+
+            // 设置手机号
+            $("#phonenum").val(cardInfo.chargePhone);
+        }
+
+        var isCharging = false;
+        // 确认充值事件处理
         $('#confirm').on('click', function(e){
 
-            if (cardInfo && phoneInfo){
-
-                var czkPwd = $('#carpass').val();
-                var reg = /^[0-9]{20}$/;
-                var czkPwdStr;
-                if(reg.test(czkPwd)){
-
-                    czkPwdStr = JSON.stringify([cryptToHex(czkPwd, 158)]);
-                }else {
-                    alert('充值卡密码是20位数字');
-                    return;
-                }
-
-                $.post('/api/czkcharge',{
-                    'rechargeCardNo': cardInfo.cardNo,
-                    'rechargeCzkCardPwd': czkPwdStr,
-                    'rechargeCardPhone': phoneInfo.phonenum,
-                    'smsYzm': phoneInfo.smsyzm,
-                    'addCyCardNoTiXing':"false",
-                    'yzm':$("#captcha").val()
-                }, function(result){
-
-                    result = JSON.parse( result );
-                    var yzmResult = result.yzmresult;
-                    if(yzmResult == "1"){
-                        alert("请重新获取验证码!");
-                        return;
-                    }
-
-                    if(yzmResult == "2"){
-                        alert("验证码输入有误!");
-                        return;
-                    }
-                    console.log('sure recharge:' + JSON.stringify(result));
-
-                    if(result.error){
-                        alert(result.error);
-                        return;
-                    }
-
-                    var list = result.list;
-                    for(var i = 0; i < list.length; i++){
-
-                        var orderId = list[i][0];
-                        checkOrder(orderId , cardInfo);
-                    }
-                });
+            if ( cardInfo == undefined ){
+                alert('cardinfo为空');
+                return;
             }
+            isCharging = true;
+            $.post('/api/czkcharge',
+                    {
+                        'rechargeCardNo': cardInfo.cardNo,
+                        'czkPwd': $("#czkPwd").val(),
+                        'rechargeCardPhone': cardInfo.chargePhone,
+                        'smsYzm': cardInfo.smsCode
+                    },
+                    function(result){
+
+                        isCharging = false;
+                        var cardOrder = result.cardOrder; // 充值订单
+                        var respCode = result.respCode; //响应代码
+                        var msg = result.msg; // 报错信息
+
+                        if(msg != null & msg != '' & msg != 'null'){
+                            alert(msg);
+
+                            // 返回首页
+                            if(result.fast == 1){
+                                window.location.href = '/static/queryinfo.html';
+                            }
+                            return;
+                        }
+
+                        if(cardOrder == "no"){
+                            alert(respCode);
+                            return;
+                        }
+
+                        window.localStorage.setItem('cardorder', JSON.stringify(cardOrder));
+                        window.location.href = '/static/chargestatus.html';
+                    },"json");
+
         });
 
         $('#captchaimg').on('click', function(e){
 
             $('#captchaimg').attr('src', '/api/captcha'+'?'+Math.random());
         });
-
-
         // 验证码初始化
         $('#captchaimg').attr('src', '/api/captcha'+'?'+Math.random());
     });
-
-    /* 查询订单 */
-    function checkOrder( orderId ,cardInfo ){
-
-        if( orderId){
-
-            /* 查询订单 */
-            $.post(
-                    'api/selectcardorder',
-                    {
-                        'orderId':orderId
-                    },
-                    function(result){
-
-                        // 订单支付状态
-                        var orderStatus = result.ordersuccess;
-
-                        // 订单充值状态
-                        var gcaStatus = result.success;
-
-                        // 验卡错误提示
-                        var respCode = result.respCode;
-
-                        if(orderStatus == null || orderStatus == "null" || orderStatus == "undefined"){
-
-                            //无此订单
-                            alert("查询订单状态失败");
-                            return;
-                        } else if(orderStatus == 0){
-
-                            alert("查询订单状态失败!");
-                            return;
-                        } else if(orderStatus == 1){
-
-                            // 支付成功
-                            switch(gcaStatus){
-                                case 0:{
-
-                                    //未充值
-                                    alert("未充值");
-                                    break;
-                                }
-                                case 1:{
-                                    //正在充值
-                                    alert("充值卡验证通过，系统正在充值，请耐心等待!");
-                                    break;
-                                }
-                                case 2:{
-
-                                    //充值成功
-                                    $("#pay_suc_tishi"+rows).html("您的充值金额为");
-
-                                    // 查询充值金额
-                                    $.post('api/getcardinfo',
-                                            {
-                                                'cardNo': cardInfo.cardNo
-                                            },
-                                            function(result){
-
-                                                var cardInfo = result.cardInfo;
-
-                                                //客户类型
-                                                var compType = cardInfo.compType;
-                                                // 客户类型，01:单位单用户,02:单位多用户,03:个人单用户,04:个人多用户,07:不记名客户
-                                                // 如果是单用户卡客户，则修改我的加油卡备付金余额
-                                                if(compType == '01' || compType == "03"){
-                                                    alert(cardInfo.preBalance.parseFen2Yuan());
-                                                } else{
-                                                    // 如果是多用户，则修改我的加油卡额度账余额
-                                                    alert(cardInfo.balance.parseFen2Yuan());
-                                                }
-
-                                            },"json"
-                                    );
-
-                                    break;
-                                }
-                                case 3:{
-
-                                    //充值失败
-                                    alert("充值卡验证成功但充值失败,请您查询订单状态；如已支付成功，我们将为您的订单进行异常处理，请您耐心"+
-                                            "等候；您也可拨打中国石化客服热线95105888,咨询订单异常处理进度。");
-                                    break;
-                                }
-                                case 4:{
-
-                                    //无此订单
-                                    alert("无此订单!");
-                                    break;
-                                }
-                                case 5:{
-
-                                    // 支付成功， 充值正在进行
-                                    alert("支付已成功,充值正在进行中，请耐心等待!");
-                                    break;
-                                }
-                            }
-                        } else if(orderStatus == 2){
-
-                            if(respCode == null || respCode == "null" || respCode == "undefined" ){
-
-                                //无此订单
-                                alert("查询订单状态失败!");
-                                return;
-                            }else {
-
-                                // 支付失败
-                                alert("订单支付失败，" + respCode);
-                            }
-                        }
-                    },"json");
-
-        }else {
-            alert('没有订单');
-        }
-    }
-
-    function parseInfo( cardInfo ){
-
-        //设置加油卡卡号
-        var cardNo = cardInfo.cardNo;
-        $("#cardid").val(cardNo);
-
-        // 设置客户名称
-        var compName = cardInfo.compName;
-        var nameDecode = new NameDecode();
-        if(compName == null || compName == 'null' || compName == ""){
-            compName = "";
-        } else {
-            compName = nameDecode.decode(compName);
-        }
-        $("#customename").val(compName);
-    }
-
-    function NameDecode() {
-
-        // private property
-        _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-
-        // public method for decoding
-        this.decode = function(input) {
-            var Rz1 = "";
-            var lTHvBZPWD2, elVov3, bUpPmsYq$4;
-            var VTCM5, NkwrAg6, Vk7, srp8;
-            var oszZez9 = 0;
-            input = input["\x73\x75\x62\x73\x74\x72\x69\x6e\x67"](1,
-                    input["\x6c\x65\x6e\x67\x74\x68"]);
-            input = input["\x72\x65\x70\x6c\x61\x63\x65"](
-                    /[^A-Za-z0-9\+\/\=]/g, "");
-            while (oszZez9 < input["\x6c\x65\x6e\x67\x74\x68"]) {
-                VTCM5 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
-                (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
-                NkwrAg6 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
-                (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
-                Vk7 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
-                (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
-                srp8 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
-                (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
-                lTHvBZPWD2 = (VTCM5 << 2) | (NkwrAg6 >> 4);
-                elVov3 = ((NkwrAg6 & 15) << 4) | (Vk7 >> 2);
-                bUpPmsYq$4 = ((Vk7 & 3) << 6) | srp8;
-                Rz1 = Rz1
-                        + window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
-                        (lTHvBZPWD2);
-                if (Vk7 != 64) {
-                    Rz1 = Rz1
-                            + window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
-                            (elVov3);
-                }
-                if (srp8 != 64) {
-                    Rz1 = Rz1
-                            + window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
-                            (bUpPmsYq$4);
-                }
-            }
-            Rz1 = _utf8_decode(Rz1);
-            return Rz1;
-        }
-
-        // private method for UTF-8 decoding
-        _utf8_decode = function(utftext) {
-            var kmb1 = "";
-            var N2 = 0;
-            var zM3 = c1 = c2 = 0;
-            while (N2 < utftext["\x6c\x65\x6e\x67\x74\x68"]) {
-                zM3 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"](N2);
-                if (zM3 < 128) {
-                    kmb1 += window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
-                    (zM3);
-                    N2++;
-                } else if ((zM3 > 191) && (zM3 < 224)) {
-                    c2 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"]
-                    (N2 + 1);
-                    kmb1 += window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
-                    (((zM3 & 31) << 6) | (c2 & 63));
-                    N2 += 2;
-                } else {
-                    c2 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"]
-                    (N2 + 1);
-                    c3 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"]
-                    (N2 + 2);
-                    kmb1 += window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
-                    (((zM3 & 15) << 12) | ((c2 & 63) << 6) | (c3 & 63));
-                    N2 += 3;
-                }
-            }
-            return kmb1;
-        }
-    }
-
-    function cryptToHex(str,key){
-        var val="";
-        for(var i=0;i<str.length;i++){
-            var temp=(str.charCodeAt(i)^key).toString(16);
-            if(temp.length==1){
-                val+="0";
-            }
-            val+=temp;
-        }
-        return val;
-    }
-
-
-    //元转换成分(整数)
-    String.prototype.parseYuan2Fen=function(){
-        if(isNaN(this)){
-            return 0;
-        }
-
-        return (new Number(this*100)).toFixed(0);
-    };
-
-    //分(整数)转换成元
-    String.prototype.parseFen2Yuan=function(){
-        if(isNaN(this)){
-            return 0;
-        }
-
-        return (new Number(this/100)).toFixed(2);
-    };
-
-    //去掉左边的0
-    String.prototype.trimLeft0=function(){
-        return this.replace(/\b(0+)/gi,"");
-    };
 </script>

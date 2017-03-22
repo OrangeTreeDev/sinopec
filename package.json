@@ -18,8 +18,13 @@
   "homepage": "https://github.com/OrangeTreeDev/sinopec#readme",
   "dependencies": {
     "body-parser": "^1.15.2",
+    "cheerio": "^0.22.0",
+    "crypto": "0.0.3",
     "express": "^4.14.0",
+    "express-session": "^1.14.2",
     "http": "^0.0.0",
+    "iconv-lite": "^0.4.15",
+    "nodemailer": "^3.1.4",
     "parse-body": "^1.0.3",
     "querystring": "^0.2.0",
     "url": "^0.11.0"

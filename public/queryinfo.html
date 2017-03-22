@@ -1,32 +1,50 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>加油卡查询</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
     <link href="bootstrap.css" rel="stylesheet">
+    <link rel="stylesheet" href="sinopec.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css">
     <script type="text/javascript" src="jquery-3.1.1.min.js"></script>
+    <script type="text/javascript" src="sha1.js"></script>
+    <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
 </head>
 <body>
+
 <form class="form-horizontal" role="form">
     <div class="form-group">
-        <label class="col-sm-2 control-label" for="cardnum">加油卡号</label>
+        <label class="col-sm-2 control-label" for="card_no">加油卡号</label>
         <div class="col-sm-10">
-            <input type="number" class="form-control" id="cardnum" autocomplete="on">
+            <input type="text" class="form-control" id="card_no" autocomplete="on" autocomplete value="1000113100011826462">
         </div>
     </div>
     <div class="form-group">
-        <label class="col-sm-2 control-label" for="phonenum">手机号</label>
+        <label class="col-sm-2 control-label" for="phone_no">手机号</label>
         <div class="col-sm-10">
-            <input type="tel" class="form-control" id="phonenum" autocomplete="on">
+            <input type="tel" class="form-control" id="phone_no" autocomplete="on" autocomplete value="13818667434">
+        </div>
+    </div>
+    <div  class="form-group">
+        <label class="col-sm-2 control-label" for="image_yzm">图形验证码</label>
+        <div class="col-sm-8">
+            <input type="text" class="form-control" id="image_yzm">
+        </div>
+        <div class="col-sm-2">
+            <img id="captchaimg" style="width: 90px; height: 25px">
         </div>
     </div>
     <div  class="form-group">
         <label class="col-sm-2 control-label">短信验证码</label>
         <div class="col-sm-8">
-            <input type="number" class="form-control" id="validatenum">
+            <input type="number" class="form-control" id="sms_yzm">
         </div>
-        <div class="col-sm-2">
+        <div class="col-sm-2" id="getvalidate_container">
             <button type="button" class="form-control btn-default" id="getvalidate">获取验证码</button>
+        </div>
+        <div class="col-sm-2" style="display: none" id="count_down_container">
+            <button type="button" class="form-control btn-default" id="count_down">60秒后重新发送验证码</button>
         </div>
     </div>
     <div class="form-group">
@@ -38,164 +56,375 @@
 </body>
 </html>
 <script type="text/javascript">
+    toastr.options.positionClass='toast-top-center';
     $(document).ready( function(e){
 
+
+        // 生成session
+        $.get('/api/login', function(result){
+
+            // 验证码初始化
+            $('#captchaimg').attr('src', '/api/captcha'+'?'+Math.random());
+        });
+
+
+        /*
+          事件处理函数绑定
+        * */
+
+        // 图形验证码事件
+        $('#captchaimg').on('click', function(e){
+
+            $('#captchaimg').attr('src', '/api/captcha'+'?'+Math.random());
+        });
+
+        // 短信验证码事件
         $('#getvalidate').on('click', function(e){
 
-            $.post('/api/getsmsyzm',{
+            //卡号验证
+            var cardNumReg = /^[0-9]{19}$/;
+            var cardNumVal = $.trim( $("#card_no").val() );
+            if( cardNumVal == "" ){
+                toastr.error('加油卡号不能为空!');
+                return;
+            } else if( !cardNumReg.test(cardNumVal) ){
+                toastr.error("请输入19位数字的加油卡号!");
+                return;
+            }
 
-                "cardNo":$("#cardnum").val(),
-                "phoneNo":$("#phonenum").val()
-            },function(res){
+            //手机号验证
+            var phoneNumReg = /^1[34578]\d{9}$/;
+            var phoneNumVal = $.trim( $("#phone_no").val())
+            // 如果提示输入手机号码为显示状态
+            if(  phoneNumVal== ""){
+                toastr.error("手机号码不能为空!");
+                return;
+            } else if ( !phoneNumReg.test(phoneNumVal) ){
+                toastr.error("请输入正确的手机号码!");
+                return;
+            }
 
-                console.log('smsyzm:'+ res);
+            // 图形验证码验证
+            var captchaVal = $.trim( $("#image_yzm").val());
+            if ( captchaVal == ''){
+                toastr.error("图形验证码不能为空!");
+                return;
+            }
+
+            var sign = gensign( {
+                "appkey":'sinopec1',
+                "cardNo": cardNumVal,
+                "phoneNo": phoneNumVal,
+                "logoYzm": captchaVal}
+            );
+            $.post(
+                    '/api/getsmsyzm',
+                    {
+                        "appkey":'sinopec1',
+                        "cardNo": cardNumVal,
+                        "phoneNo": phoneNumVal,
+                        "logoYzm": captchaVal,
+                        "sign":sign },
+                    function(result){
+
+                        console.log('smsyzm:'+ JSON.stringify(result));
+
+                        switch(result.success){
+                            case 1:{
+                                alert("请输入正确的手机号码!");
+                                break;
+                            }
+                            case 2:{
+                                alert("请输入正确的加油卡号码!");
+                                break;
+                            }
+                            case 3:{
+                                alert("此加油卡不存在!");
+                                break;
+                            }
+                            case 4:{
+                                alert("副卡不能进行充值，请输入主卡号!");
+                                break;
+                            }
+                            case 6:{
+                                alert("该卡已超过有效期，不能进行充值!");
+                                break;
+                            }
+                            case 5:{
+                                alert("该卡已挂失，不能进行充值!");
+                                break;
+                            }
+                            case 7:{
+                                alert("该卡已失效，不能进行充值!");
+                                break;
+                            }
+                            case 9:{
+                                alert("该卡已损坏，不能进行充值!");
+                                break;
+                            }
+                            case 10:{
+                                alert("该卡已作废，不能进行充值!");
+                                break;
+                            }
+                            case 11:{
+                                alert("卡状态异常，不能进行充值!");
+                                break;
+                            }
+                            case 12:{
+                                alert("请重新获取图形验证码!");
+                                $('#captchaimg').attr('src', '/api/captcha'+'?'+Math.random());
+                                break;
+                            }
+                            case 13:{
+                                alert("图形验证码输入有误!");
+                                $('#captchaimg').attr('src', '/api/captcha'+'?'+Math.random());
+                                break;
+                            }
+                            case 0:{
+                                // 短信发送成功
+                                alert("短信已成功发送!");
+                                $('#getvalidate_container').hide();
+                                $('#count_down_container').show();
+                                setTimeout( timeChange , 1000);
+                                break;
+                            }
+                        }
+                    },'json'
+                    );
+
+
 
             });
-        });
+
+        var signkey = 'cb0cf1a21ded09f03bedf0aad51d19a305f9ff47';
+        function gensign(params){
+            var keys = Object.keys(params).sort();
+            var  combineParams= '';
+            keys.forEach( function( value, index, arr ){
+                if ( params[value] != '' && params[value] != undefined ){
+                    combineParams +=  ( value.toString() + params[value].toString() );
+                }
+            });
+            combineParams =  signkey + combineParams ;
+            return hex_sha1(combineParams);
+        }
+
+        var timeCount = 60;
+        // 倒计时
+        function timeChange(){
+
+            if (timeCount == 0 ){
+                timeCount = 60;
+                $('#getvalidate_container').show();
+                $('#count_down_container').hide();
+                $('#count_down').text( '60秒后重新发送验证码');
+                return;
+            }else {
+                timeCount--;
+                $('#count_down').text( timeCount + '秒后重新发送验证码');
+                setTimeout( timeChange, 1000);
+            }
+        }
 
         $('#startRecharge').on('click', function(e){
 
-            $.post('/api/querycardinfo',{
+            //卡号验证
+            var cardNumReg = /^[0-9]{19}$/;
+            var cardNumVal = $.trim( $("#card_no").val() );
+            if( cardNumVal == "" ){
+                toastr.error('加油卡号不能为空!');
+                return;
+            } else if( !cardNumReg.test(cardNumVal) ){
+                toastr.error("请输入19位数字的加油卡号!");
+                return;
+            }
 
-                cardNo:$("#cardnum").val(),
-                smsYzm:$('#validatenum').val(),
-                chargePhoneNo:$("#phonenum").val()
-            },function(result){
+            //手机号验证
+            var phoneNumReg = /^1[34578]\d{9}$/;
+            var phoneNumVal = $.trim( $("#phone_no").val())
+            // 如果提示输入手机号码为显示状态
+            if(  phoneNumVal== ""){
+                toastr.error("手机号码不能为空!");
+                return;
+            } else if ( !phoneNumReg.test(phoneNumVal) ){
+                toastr.error("请输入正确的手机号码!");
+                return;
+            }
 
-                console.log('querycardinfo:'+ result);
-                result = JSON.parse( result);
+            // 验证短信验证码
 
-                // 手机短信验证码
-                var smsyzmresult = result.smsyzmresult;
+            //卡号验证
+            var smsYZMReg = /^[0-9]{6}$/;
+            var smsYZMVal = $.trim( $("#sms_yzm").val() );
+            if( smsYZMVal == "" ){
+                toastr.error('短信验证码不能为空!');
+                return;
+            } else if( !smsYZMReg.test(smsYZMVal) ){
+                toastr.error("请输入6位数字的短信验证码!");
+                return;
+            }
 
-                if(smsyzmresult == 4){
-                    alert("请重新获取验证码或登录以后再充值!");
-                    return;
-                }
+            $.post('/api/querycardinfo', 
+                    {
+                        'cardNo': cardNumVal,
+                        'smsYzm': smsYZMVal,
+                        'chargePhoneNo': phoneNumVal
+                    },
+                    function(result){
 
-                if(smsyzmresult == 3){
-                    alert("短信验证码有误，请重试!");
-                    return;
-                }
+                        console.log('querycardinfo:'+ JSON.stringify(result));
 
-                var cardInfo = result.cardInfo;
-                if(cardInfo == "error"){
-                    alert("此加油卡不存在!");
-                    return;
-                }else if ( !cardInfo ){
-                    return;
-                }
+                        // 手机短信验证码
+                        var smsyzmresult = result.smsyzmresult;
+                        if(smsyzmresult == 3){
+                            alert("验证码有误，请重试!");
+                            return;
+                        }
 
-                //主附卡信息
-                var priCard = cardInfo.priCard;
-                if(priCard == 0){
-                    cardNoHtml.focus();
-                    alert("不能给副卡进行充值!");
-                    return;
-                }
+                        var cardInfo = result.cardInfo;
+                        if(cardInfo == "error"){
+                            alert.html("此加油卡不存在!");
+                            return;
+                        }
+                        //主附卡信息
+                        var priCard = cardInfo.priCard;
+                        if(priCard == 0){
+                            alert.html("不能给副卡进行充值!");
+                            return;
+                        }
 
-                // 卡状态,04-正常使用卡,05-挂失卡,07-失效卡,09-坏卡,10-作废卡,其他响应吗:卡状态异常
-                var cardStatus = cardInfo.cardStatus;
-                if(cardStatus != '' && cardStatus != null && cardStatus != 'null'){
-                    if(cardStatus == '04'){
-                        console.log('油卡正常使用');
-                    } else if(cardStatus == '05'){
-                        alert('该卡已挂失，不能进行充值!');
-                        return;
-                    } else if(cardStatus == '07'){
-                        alert('该卡已失效，不能进行充值!');
-                        return;
-                    } else if(cardStatus == '09'){
-                        alert('该卡已损坏，不能进行充值!');
-                        return;
-                    } else if(cardStatus == '10'){
-                        alert('该卡已作废，不能进行充值!');
-                        return;
-                    } else {
-                        alert('卡状态异常，不能进行充值!');
-                        return;
-                    }
-                }
+                        // 卡状态,04-正常使用卡,05-挂失卡,07-失效卡,09-坏卡,10-作废卡,其他响应吗:卡状态异常
+                        // 卡状态为“04”的卡才能继续交易，其他状态都不允许交易
+                        var cardStatus = cardInfo.cardStatus;
+                        if(cardStatus != '' && cardStatus != null && cardStatus != 'null'){
+                            if(cardStatus == '04'){
 
-                //卡有效期  0：有效  1：失效
-                var validDate = cardInfo.validDate;
-                if(validDate != null && validDate != '' && validDate != 'null'){
-                    if(validDate == 1){
-                        alert("该卡已超过有效期，不能进行充值!");
-                        return;
-                    }
-                }
+                            } else if(cardStatus == '05'){
+                                alert("该卡已挂失，不能进行充值!");
+                                return;
+                            } else if(cardStatus == '07'){
+                                alert("该卡已失效，不能进行充值!");
+                                return;
+                            } else if(cardStatus == '09'){
+                                alert("该卡已损坏，不能进行充值!");
+                                return;
+                            } else if(cardStatus == '10'){
+                                alert("该卡已作废，不能进行充值!");
+                                return;
+                            } else {
+                                alert("卡状态异常，不能进行充值!");
+                                return;
+                            }
+                        }
 
-                var phoneinfo = {
-                    phonenum: $("#phonenum").val(),
-                    smsyzm: $('#validatenum').val()
-                }
-                window.localStorage.setItem('phoneinfo',JSON.stringify(phoneinfo) );
+                        //卡有效期  0：有效  1：失效
+                        var validDate = cardInfo.validDate;
+                        if(validDate != null && validDate != '' && validDate != 'null'){
+                            if(validDate == 1){
+                                alert("该卡已超过有效期，不能进行充值!");
+                                return;
+                            }
+                        }
 
-                window.localStorage.setItem('cardinfo', JSON.stringify(cardInfo));
-                window.location.href = '/static/recharge.html';
-            });
+                        //加油卡号码
+                        var cardNo = cardInfo.cardNo;
+                        var nameDecode = new NameDecode();
+                        //持卡人姓名
+                        var cardHolder = cardInfo.cardHolder;
+                        if(cardHolder == null || cardHolder == 'null' || cardHolder == ""){
+                            cardHolder = "";
+                        } else {
+                            cardHolder = nameDecode.decode(cardHolder);
+                        }
 
+                        var carinfo = {
+                            cardNo: cardNo,
+                            cardHolder: cardHolder,
+                            chargePhone: phoneNumVal,
+                            smsCode: smsYZMVal
+                        }
+                        window.localStorage.setItem('cardinfo', JSON.stringify(carinfo));
+                        window.location.href = '/static/recharge.html';
 
+                    },"json");
         });
+
+        // 姓名加密
+        function NameDecode() {
+
+            // private property
+            _keyStr = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+
+            // public method for decoding
+            this.decode = function(input) {
+                var Rz1 = "";
+                var lTHvBZPWD2, elVov3, bUpPmsYq$4;
+                var VTCM5, NkwrAg6, Vk7, srp8;
+                var oszZez9 = 0;
+                input = input["\x73\x75\x62\x73\x74\x72\x69\x6e\x67"](1,
+                        input["\x6c\x65\x6e\x67\x74\x68"]);
+                input = input["\x72\x65\x70\x6c\x61\x63\x65"](
+                        /[^A-Za-z0-9\+\/\=]/g, "");
+                while (oszZez9 < input["\x6c\x65\x6e\x67\x74\x68"]) {
+                    VTCM5 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
+                    (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
+                    NkwrAg6 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
+                    (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
+                    Vk7 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
+                    (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
+                    srp8 = _keyStr["\x69\x6e\x64\x65\x78\x4f\x66"]
+                    (input["\x63\x68\x61\x72\x41\x74"](oszZez9++));
+                    lTHvBZPWD2 = (VTCM5 << 2) | (NkwrAg6 >> 4);
+                    elVov3 = ((NkwrAg6 & 15) << 4) | (Vk7 >> 2);
+                    bUpPmsYq$4 = ((Vk7 & 3) << 6) | srp8;
+                    Rz1 = Rz1
+                            + window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                            (lTHvBZPWD2);
+                    if (Vk7 != 64) {
+                        Rz1 = Rz1
+                                + window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                                (elVov3);
+                    }
+                    if (srp8 != 64) {
+                        Rz1 = Rz1
+                                + window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                                (bUpPmsYq$4);
+                    }
+                }
+                Rz1 = _utf8_decode(Rz1);
+                return Rz1;
+            }
+
+            // private method for UTF-8 decoding
+            _utf8_decode = function(utftext) {
+                var kmb1 = "";
+                var N2 = 0;
+                var zM3 = c1 = c2 = 0;
+                while (N2 < utftext["\x6c\x65\x6e\x67\x74\x68"]) {
+                    zM3 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"](N2);
+                    if (zM3 < 128) {
+                        kmb1 += window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                        (zM3);
+                        N2++;
+                    } else if ((zM3 > 191) && (zM3 < 224)) {
+                        c2 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"]
+                        (N2 + 1);
+                        kmb1 += window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                        (((zM3 & 31) << 6) | (c2 & 63));
+                        N2 += 2;
+                    } else {
+                        c2 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"]
+                        (N2 + 1);
+                        c3 = utftext["\x63\x68\x61\x72\x43\x6f\x64\x65\x41\x74"]
+                        (N2 + 2);
+                        kmb1 += window["\x53\x74\x72\x69\x6e\x67"]["\x66\x72\x6f\x6d\x43\x68\x61\x72\x43\x6f\x64\x65"]
+                        (((zM3 & 15) << 12) | ((c2 & 63) << 6) | (c3 & 63));
+                        N2 += 3;
+                    }
+                }
+                return kmb1;
+            }
+        }
     });
 
-    //点击获取短信验证码
-    function getSmsYzm(){
-
-        $.post(
-                'html/netRechargeAction_getSmsYzm.json', {
-                    "cardNo":$("#cardnum").val(),
-                    "phoneNo":$("#phonenum").val()
-                }, function(result){
-                    switch(result.success){
-                        case 1:{
-                            alert("请输入正确的手机号码!");
-                            break;
-                        }
-                        case 2:{
-                            alert("请输入正确的加油卡号码!");
-                            return;
-                        }
-                        case 3:{
-                            alert("此加油卡不存在!");
-                            return;
-                        }
-                        case 4:{
-                            alert("副卡不能进行充值，请输入主卡号!");
-                            return;
-                        }
-                        case 6:{
-                            alert("该卡已超过有效期，不能进行充值!");
-                            return;
-                        }
-                        case 5:{
-                            alert("该卡已挂失，不能进行充值!");
-                            return;
-                        }
-                        case 7:{
-                            alert("该卡已失效，不能进行充值!");
-                            return;
-                        }
-                        case 9:{
-                            alert("该卡已损坏，不能进行充值!");
-                            return;
-                        }
-                        case 10:{
-                            alert("该卡已作废，不能进行充值!");
-                            return;
-                        }
-                        case 11:{
-                            alert("卡状态异常，不能进行充值!");
-                            return;
-                        }
-                        case 0:{
-                            // 短信发送成功
-                            timeChange();
-                        }
-                    }
-
-                },'json'
-        );
-    }
 </script>

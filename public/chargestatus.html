@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+
+<p class=""> 您的支付金额为<span id="recharge_orderMoney"></span>元</p>
+<p class="">订单为：<span id="order_no"></span></p>
+<div style="margin-top: 50px">
+    <img id="recharge_tishi_image" style="width: 30px; height: 30px;" src="/static/images/load.gif">
+    <p id="recharge_tishi_text"></p>
+</div>
+
+</body>
+</html>
+
+<script type="text/javascript">
+
+    $(document).ready( function(e){
+
+        // 读取localstorage里面存储的值
+        console.log('status:' + window.localStorage.cardorder);
+        var cardorder = window.localStorage.cardorder? JSON.parse( window.localStorage.cardorder): undefined;
+
+        //订单Id
+        var orderId = cardorder.orderId;
+        //充值金额
+        var orderMoney = cardorder.orderMoney+"";
+        // 验证消息
+        var verifyMsg = cardorder.verifyMsg;
+
+        $("#recharge_orderMoney").html( orderMoney.parseFen2Yuan() );
+
+        if(orderId != '' && orderId != null && orderId != 'null'){
+
+            // 充值状态界面 显示订单号
+            $("#order_no").html(orderId);
+
+            //正在充值
+            $("#recharge_tishi_text").html("充值卡验证通过，系统正在充值，请耐心等待!");
+
+            var tishiImage = $('#recharge_tishi_image');
+            $.post(
+                    '/api/selectcardorder',
+                    {
+                        'orderId':orderId,
+                        'verifyMsg':verifyMsg
+                    },
+                    function(result){
+
+                        var msg = result.msg;
+                        if(msg == 29){
+                            tishiImage.src = '/static/images/recharge_failed.png';
+                            $("#recharge_tishi_text").html("该订单号不是您当前的订单号，查询失败!");
+                            return;
+                        }
+
+                        switch(result.success){
+                            case 0:{
+                                //未充值
+                                tishiImage.src = '/static/images/recharge_failed.png';
+                                $("#recharge_tishi_text").html("未充值");
+                                break;
+                            }
+                            case 1:{
+                                //正在充值
+                                tishiImage.src = '/static/images/load.gif';
+                                $("#recharge_tishi_text").html("充值卡验证通过，系统正在充值，请耐心等待!");
+                                break;
+                            }
+                            case 2:{
+                                //充值成功
+                                tishiImage.src = '/static/images/recharge_suc.png';
+                                $("#recharge_tishi_text").html("充值成功!");
+                                break;
+                            }
+                            case 3:{
+                                //充值失败
+                                tishiImage.src = '/static/images/recharge_failed.png';
+                                $("#recharge_tishi_text").html("充值卡验证成功但充值失败,请您查询订单状态；如已支付成功，我们将为您的订单进行异常处理，请您耐心"+
+                                        "等候；您也可拨打中国石化客服热线<font style=\"color: #0063B4;font-size:14px;\">95105888</font>咨询订单异常处理进度。");
+                                break;
+                            }
+                            case 4:{
+                                //无此订单
+                                tishiImage.src = '/static/images/recharge_failed.png';
+                                $("#recharge_tishi_text").html("无此订单!");
+                                break;
+                            }
+                            case 5:{
+                                // 支付成功， 充值正在进行
+                                tishiImage.src = '/static/images/recharge_suc.png';
+                                $("#recharge_tishi_text").html("支付已成功,充值正在进行中，请耐心等待!");
+                                break;
+                            }
+                        }
+                    },"json"
+                    );
+        }else{
+            $("#recharge_tishi_text").html("orderId丢失!");
+        }
+    });
+
+</script>
+<script type="text/javascript">
+    //元转换成分(整数)
+    String.prototype.parseYuan2Fen=function(){
+        if(isNaN(this)){
+            return 0;
+        }
+
+        return (new Number(this*100)).toFixed(0);
+    };
+
+    //分(整数)转换成元
+    String.prototype.parseFen2Yuan=function(){
+        if(isNaN(this)){
+            return 0;
+        }
+
+        return (new Number(this/100)).toFixed(2);
+    };
+
+    //去掉左边的0
+    String.prototype.trimLeft0=function(){
+        return this.replace(/\b(0+)/gi,"");
+    };
+</script>
